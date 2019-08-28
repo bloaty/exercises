@@ -1,7 +1,7 @@
 ## What
 
 This repo contains Java solutions to various programming exercises.
-Java 8+ should suffice.
+Bring your own `java` and `javac`. Java 8+ should suffice.
 
 ## How to Run
 
@@ -16,7 +16,7 @@ Compile everything using your own `javac` into `out/` like so:
 ```
 Run individual programs like so:
 ```shell
-java [JVM_OPTS...] -cp 'out:libs' [CLASS] [ARGS...]
+  java [JVM_OPTS...] -cp 'out:libs' [CLASS] [ARGS...]
 ```
 Above, `CLASS` is the full name of the program class, which is
 the class file's relative path from `out/`, minus the `.class`
