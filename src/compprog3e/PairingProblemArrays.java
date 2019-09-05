@@ -6,6 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.Function;
@@ -14,7 +15,7 @@ import java.util.stream.Stream;
 
 import static java.lang.Double.parseDouble;
 
-public class PairingProblemArrays {
+public final class PairingProblemArrays {
     public static void main(String[] args) throws IOException {
         // Read file input.
         Path inputFile = Path.of(args[0]);
@@ -57,7 +58,8 @@ public class PairingProblemArrays {
         Stream<int[]> pairings = matchUp(initialIndexes, 0, numPoints);
 
         ConcurrentLinkedQueue<Pairing> bests = new ConcurrentLinkedQueue<>();
-        bests.add(Pairing.THE_WORST_PAIRING); // Initialize so that we don't have to check for empty.
+        // Initialize so that we don't have to check for empty every time.
+        bests.add(Pairing.THE_WORST_PAIRING);
         pairings.forEach(pairing -> {
             double pathSum = Pairing.calculatePathSum(pairing, distances);
             double currentBest = bests.peek().totalDistance;
@@ -70,13 +72,15 @@ public class PairingProblemArrays {
                 bests.add(new Pairing(pairing, distances, points));
             }
         });
+
+        // Print all winners to STDOUT.
         bests.forEach(System.out::println);
     }
 
     // Each int[] is a full pairing and has a length equal to the number of points.
     // Successive pairs of entries are, implicitly, indexes of paired points,
     // namely, { p0_0, p0_1, p1_0, p1_1, p2_0, ... }. At a depth of N, this method
-    // sets the N-th pair at indexes (depth * 2) and (depth * 2 + 1).
+    // sets the N-th pair at indexes (N * 2) and (N * 2 + 1).
     // We stream the pairings so that we don't have to have an exhaustive
     // enumeration of them in memory at once.
     private static Stream<int[]> matchUp(int[] indexes, int depth, int numPoints) {
@@ -123,6 +127,8 @@ public class PairingProblemArrays {
         double totalDistance;
         Point2D.Double[] points;
 
+        static final Pairing THE_WORST_PAIRING = new Pairing();
+
         Pairing(int[] pairing, double[][] distances, Point2D.Double[] points) {
             this.pairing = pairing;
             this.totalDistance = calculatePathSum(pairing, distances);
@@ -134,8 +140,6 @@ public class PairingProblemArrays {
             this.totalDistance = Double.MAX_VALUE;
             this.points = new Point2D.Double[0];
         }
-
-        static final Pairing THE_WORST_PAIRING = new Pairing();
 
         static double calculatePathSum(int[] pairing, double[][] distances) {
             double sum = 0;
