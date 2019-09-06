@@ -3,9 +3,15 @@ package adm2e.tsp;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -56,11 +62,7 @@ public class LocalSearch {
                 bestSolution = solution;
             }
         }
-        System.out.println("Best solution is "
-            + Arrays.toString(bestSolution.getVertexVisitOrder())
-            + " with total cost "
-            + bestSolution.getCost()
-            + ".");
+        System.out.println(bestSolution);
     }
 
     private static Stream<String> readRawInput(String path) throws IOException {
@@ -229,7 +231,9 @@ public class LocalSearch {
          *         found by this search attempt
          */
         public TspSolution getFixedPointSolution() {
-            while (!reachedFixedPoint) iterateOnce();
+            while (!reachedFixedPoint) {
+                iterateOnce();
+            }
             return new TspSolution(context, currentSolution);
         }
 
@@ -287,7 +291,7 @@ public class LocalSearch {
             }
         }
 
-        // Just a simple functional interface to type-alias this function signature.
+        // Just a simple functional interface to type-alias this ugly function signature.
         @FunctionalInterface
         private interface SolverAction {
             void perform(int[] bestReachableSolution,
@@ -367,19 +371,47 @@ public class LocalSearch {
     public static final class TspSolution {
         private final int[] vertexVisitOrder;
         private final double cost;
+        private final TspContext context;
 
         private TspSolution(TspContext context, int[] vertexVisitOrder) {
             this.vertexVisitOrder =
                 Arrays.copyOf(vertexVisitOrder, vertexVisitOrder.length);
             this.cost = context.getPathCost(vertexVisitOrder);
+            this.context = context;
         }
 
         public double getCost() {
-            return this.cost;
+            return cost;
         }
 
         public int[] getVertexVisitOrder() {
-            return Arrays.copyOf(vertexVisitOrder, vertexVisitOrder.length);
+            return Arrays.copyOf(canonicalizeVertexOrder(), vertexVisitOrder.length);
+        }
+
+        @Override
+        public String toString() {
+            return "Visit order: ["
+                + Arrays.stream(canonicalizeVertexOrder())
+                        .mapToObj(context::getVertexLabel)
+                        .collect(Collectors.joining(" -> "))
+                + "]. Total cost: "
+                + getCost();
+        }
+
+        // A copy of the vertex order with vertex 0 in position 0.
+        // Two orders may still differ trivially by clock direction.
+        private int[] canonicalizeVertexOrder() {
+            int minIndex = 0;
+            int numVertices = vertexVisitOrder.length;
+            for (int i = 1; i < numVertices; i++) {
+                if (vertexVisitOrder[i] < vertexVisitOrder[minIndex]) {
+                    minIndex = i;
+                }
+            }
+            int[] canonical = new int[numVertices];
+            System.arraycopy(vertexVisitOrder, minIndex, canonical, 0, numVertices - minIndex);
+            System.arraycopy(vertexVisitOrder, 0, canonical, numVertices - minIndex, minIndex);
+            return canonical;
         }
     }
 }
