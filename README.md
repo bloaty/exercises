@@ -16,7 +16,7 @@ Compile everything using your own `javac` into `out/` like so:
 ```
 Run individual programs like so:
 ```shell
-  java [JVM_OPTS...] -cp 'out:libs' [CLASS] [ARGS...]
+  java [JVM_OPTS...] -cp 'out:libs/*' [CLASS] [ARGS...]
 ```
 Above, `CLASS` is the full name of the program class, which is
 the class file's relative path from `out/`, minus the `.class`
