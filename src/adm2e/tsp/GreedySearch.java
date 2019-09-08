@@ -52,6 +52,9 @@ public class GreedySearch {
         lines.forEach(line ->
             processLine(line, labelCollector, labelToLabelToDistance));
 
+        // Input was invalid.
+        if (labelCollector.isEmpty()) throw new RuntimeException("Input file was empty!");
+
         // Reshape collected input.
         String[] labels = labelCollector.toArray(new String[0]);
         Arrays.sort(labels);
