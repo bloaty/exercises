@@ -1,6 +1,7 @@
 package compprog3e.onlinejudge;
 
 import java.util.Arrays;
+import java.util.IntSummaryStatistics;
 import java.util.Scanner;
 
 // Small enough to do a linear search.
@@ -15,8 +16,9 @@ public class OnlineJudge11364Parking {
                 positions[j] = scanner.nextInt();
             }
             int bestSum = Integer.MAX_VALUE;
-            int max = Arrays.stream(positions).max().getAsInt();
-            int min = Arrays.stream(positions).min().getAsInt();
+            IntSummaryStatistics inputStats = Arrays.stream(positions).summaryStatistics();
+            int max = inputStats.getMax();
+            int min = inputStats.getMin();
             for (int k = 0; k < 100; k++) {
                 int sum;
                 if (k < min) {
