@@ -30,7 +30,7 @@ public class GreedySearch {
 
     private static void usage() {
         System.err.println(
-            "Usage: java -cp 'out:lib' "
+            "Usage: java -cp 'out:libs/*' "
                 + AnnealingSearch.class.getName()
                 + " <path to input file> <number of retries>");
     }

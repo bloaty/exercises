@@ -42,40 +42,14 @@ public class AnnealingSearch {
     private static final String NUM_TRIALS_FLAG = "n";
     private static final int DEFAULT_NUM_TRIALS = 1;
 
-    private static Options getOptions() {
-        Options options = new Options();
-        Option tempReductionThreshold = new Option(
-            TEMP_REDUCTION_FLAG,
-            "reduce-after",
-            true, // option does have a value
-            "reduce temperature after this many consecutively accepted state transitions");
-        Option stuckCondition = new Option(
-            STUCK_FLAG,
-            "stop-after",
-            true, // option does have a value
-            "stop after this many consecutive iterations with no improvement in cost"
-        );
-        Option numRetries = new Option(
-            NUM_TRIALS_FLAG,
-            "num-trials",
-            true,
-            "number of trials to run"
-        );
-        options.addOption(tempReductionThreshold);
-        options.addOption(stuckCondition);
-        options.addOption(numRetries);
-        return options;
-    }
-
-    private static void usage() {
-        System.err.println(
-            "Usage: java -cp 'out:lib' "
-                + AnnealingSearch.class.getName()
-                + " <path to input file> <number of retries>");
-    }
-
-    public static void main(String[] args) throws IOException, ParseException {
-        CommandLine cli = new DefaultParser().parse(getOptions(), args, true);
+    public static void main(String[] args) throws IOException {
+        CommandLine cli;
+        try {
+            cli = new DefaultParser().parse(getOptions(), args, false);
+        } catch (ParseException e) {
+            usage();
+            return;
+        }
 
         int tempReductionAfter;
         if (cli.hasOption(TEMP_REDUCTION_FLAG)) {
@@ -107,7 +81,7 @@ public class AnnealingSearch {
             processLine(line, labelCollector, labelToLabelToDistance));
 
         // Input was invalid.
-        if (labelCollector.isEmpty()) return;
+        if (labelCollector.isEmpty()) throw new RuntimeException("Input file was empty!");
 
         // Reshape collected input.
         String[] labels = labelCollector.toArray(new String[0]);
@@ -137,17 +111,43 @@ public class AnnealingSearch {
         System.out.println(bestSolution);
     }
 
+    private static Options getOptions() {
+        Options options = new Options();
+        Option tempReductionThreshold = new Option(
+            TEMP_REDUCTION_FLAG,
+            "reduce-after",
+            true, // option does have a value
+            "reduce temperature after this many consecutively accepted state transitions");
+        Option stuckCondition = new Option(
+            STUCK_FLAG,
+            "stop-after",
+            true, // option does have a value
+            "stop after this many consecutive iterations with no improvement in cost"
+        );
+        Option numRetries = new Option(
+            NUM_TRIALS_FLAG,
+            "num-trials",
+            true,
+            "number of trials to run"
+        );
+        options.addOption(tempReductionThreshold);
+        options.addOption(stuckCondition);
+        options.addOption(numRetries);
+        return options;
+    }
+
     private static Stream<String> readRawInput(CommandLine cli) throws IOException {
         Path inputFile = Path.of(cli.getArgs()[0]);
-        try {
-            return Files.newBufferedReader(inputFile)
-                .lines()
-                .filter(s -> !s.isEmpty());
-        } catch (IOException e) {
-            new HelpFormatter().printHelp("java -cp 'out/*:libs/*' [JAVA_OPTS] " + AnnealingSearch.class.getName() + " ",
-                getOptions());
-            return Stream.empty();
-        }
+        return Files.newBufferedReader(inputFile)
+                    .lines()
+                    .filter(s -> !s.isEmpty());
+    }
+
+    private static void usage() {
+        String command = "java -cp 'out:libs/*' [JAVA_OPTS] "
+            + AnnealingSearch.class.getName()
+            + " INPUT_FILE";
+        new HelpFormatter().printHelp(120, command, null, getOptions(), null, true);
     }
 
     private static void processLine(String line,
@@ -210,10 +210,10 @@ public class AnnealingSearch {
      */
     private static final class AnnealingRule implements DecisionRule {
         // parameter defaults
-        private static final double INITIAL_TEMPERATURE = 1.0;
+        private static final double INITIAL_TEMPERATURE = 1.0/32.0;
         private static final int CONSECUTIVE_ACCEPTS_BEFORE_TEMP_REDUCED = 20;
         private static final double TEMP_REDUCTION_FACTOR = 0.5;
-        private static final double TEMP_LOWER_THRESHOLD = Math.pow(2, -12);
+        private static final double TEMP_LOWER_THRESHOLD = 16.0 * Double.MIN_VALUE;
         private static final int MAX_CONSECUTIVE_SAME_CURRENT_COST = 5;
 
         // parameters for this instance
@@ -247,7 +247,7 @@ public class AnnealingSearch {
             if (criterion > random.nextDouble()) {
                 consecutiveAccepts++;
                 if (consecutiveAccepts > consecutiveAcceptsBeforeTempReduced) {
-                    System.out.println("Halving temperature!");
+                    System.out.println("Reducing temperature!");
                     consecutiveAccepts = 0;
                     currentTemperature = currentTemperature * TEMP_REDUCTION_FACTOR;
                 }
@@ -271,9 +271,12 @@ public class AnnealingSearch {
                 consecutiveSameCurrentCost = 0;
                 return false;
             }
-            consecutiveSameCurrentCost++;
+            double relativeDelta = (lastSeenCurrentCost - currentCost) / currentCost;
+            if (relativeDelta < 0.0005) {
+                consecutiveSameCurrentCost++;
+            }
             boolean stuck = consecutiveSameCurrentCost >= maxConsecutiveSameCurrentCost;
-            if (stuck) System.out.println("Got stuck!");
+            if (stuck) System.out.println("Solution stabilized!");
             return stuck;
         }
     }
@@ -563,10 +566,28 @@ public class AnnealingSearch {
                 selectedReachableCost,
                 this::singleMoveInSearchSpace);
 
+            // If we are in danger of getting stuck, do a heroic depth-2 search.
             double currentCost = context.getPathCost(currentSolution);
             double nextCost = selectedReachableCost.get();
             if (context.getDecisionRule().fixedPointDetected(currentCost, nextCost)) {
-                reachedFixedPoint = true;
+                SolverAction nestedAction = (srs, src, i, j, k, m) -> {
+                    swap(currentSolution, i, j, k, m);
+                    doActionForAllPairsOfEdges(srs, src, this::singleMoveInSearchSpace);
+                    unswap(currentSolution, i, j, k, m);
+                };
+                doActionForAllPairsOfEdges(
+                    selectedReachableSolution,
+                    selectedReachableCost,
+                    nestedAction);
+                // If still stuck, give up on further iteration.
+                currentCost = context.getPathCost(currentSolution);
+                nextCost = selectedReachableCost.get();
+                if (context.getDecisionRule().fixedPointDetected(currentCost, nextCost)) {
+                    reachedFixedPoint = true;
+                }
+                // If looking one step ahead got us unstuck,
+                // take the step from current state to the improved state we found.
+                else System.arraycopy(selectedReachableSolution, 0, currentSolution, 0, numVertices);
             }
             // If not stuck, take the step from current state to the improved state we found.
             else System.arraycopy(selectedReachableSolution, 0, currentSolution, 0, numVertices);
